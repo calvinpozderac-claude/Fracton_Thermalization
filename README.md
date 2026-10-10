@@ -77,21 +77,51 @@ Results (`results/dynamical_exponent.png`, `.txt`), L = 1000:
 
 | filling | samples | t range | z (fit windows) |
 |---|---|---|---|
-| **n = 1 = n_c** | 48 | 10 < t < 10⁵ | **5.28 ± 0.13** (paper: 5.2) |
-| | | 10^5.5 < t < 10⁷ | **6.7 ± 2.2** (paper: 6.2) |
-| | | 10³ < t < 10⁷ | **5.63 ± 0.29** (paper: z_c = 5.7 ± 0.5) |
-| n = 1.5 | 32 | 10³ < t < 10⁶ | 4.74 ± 0.21 |
-| n = 2 | 32 | 10³ < t < 10⁶ | 4.46 ± 0.18 |
-| n = 3 | 32 | 10³ < t < 10⁶ | 4.06 ± 0.20 |
+| **n = 1 = n_c** | 72 | 10 < t < 10⁵ | **5.18 ± 0.10** (paper: 5.2) |
+| | | 10^5.5 < t < 10⁷ | **7.7 ± 1.2** (paper: 6.2) |
+| | | 10³ < t < 10⁷ | **5.76 ± 0.21** (paper: z_c = 5.7 ± 0.5) |
+| n = 1.5 | 64 | 10³ < t < 10⁶ | 4.80 ± 0.12 |
+| n = 2 | 64 | 10³ < t < 10⁶ | 4.30 ± 0.13 |
+| n = 3 | 64 | 10³ < t < 10⁶ | 4.15 ± 0.11 |
 
 * At the critical filling we reproduce the paper's large exponent, z_c ≈ 5.3 at early times,
   drifting upward at late times. We also see the imperfect collapse of C(x,t)·x₀ against x/x₀
   that the paper reports: the peak C(0,t)·x₀ keeps growing with t. The late-time window is
-  limited by statistics (only ~100 independent windows of length 10⁷). Without the offset
-  subtraction the values are 5.43 / 6.70 / 5.96.
+  limited by statistics (only ~150 windows of length 10⁷). Fits without the offset
+  subtraction are listed in `results/dynamical_exponent.txt`; they are about 0.3 higher.
 * In the thermalizing phase z approaches the hydrodynamic value z = 4 for dipole-conserving
   systems. The approach is slower closer to n_c, consistent with a crossover once x₀(t)
   exceeds the correlation length ξ ≈ 2n_c(n_c+1)/(n−n_c)² of Sec. V.A (ξ ≈ 16 at n = 1.5,
   4 at n = 2, 1 at n = 3).
 * To push further, add batches: `run_correlation.py` resumes from an existing `.npz` file and
   continues with fresh seeds.
+
+## 3. Six estimators of z
+
+`scripts/analyze_methods.py` compares six ways to get z (results in `results/methods.png`,
+`results/methods_summary.json`):
+
+1. first zero of C(x,t), x₀ ~ t^{1/z} (paper);
+2. return probability C(0,t) ~ t^{−1/z};
+3. scaling collapse C = t^{−1/z} F(x/t^{1/z});
+4. dynamic structure factor, 1/e time τ(k) ~ k^{−z};
+5. variance of the charge transferred across a bulk bond, Var ΔN ~ t^{1/z}
+   (measured directly in `correlation_run_multitau`);
+6. finite-size relaxation time of the quadrupole moment, τ(L) ~ L^z
+   (`scripts/run_finite_size.py`, L = 12–64).
+
+| n | x₀ | C(0,t) | collapse | S(k,t) | ΔN | τ(L) |
+|---|---|---|---|---|---|---|
+| 1 | 5.76 ± 0.19 | 8.00 ± 0.22 | 6.15 ± 0.26 | 5.83 ± 0.20 | 6.21 ± 0.07 | 6.16 ± 0.04 |
+| 1.5 | 4.80 ± 0.13 | 4.44 ± 0.14 | 4.90 ± 0.12 | 4.54 ± 0.09 | 4.58 ± 0.04 | 5.00 ± 0.12 |
+| 2 | 4.30 ± 0.11 | 4.16 ± 0.15 | 4.50 ± 0.12 | 4.37 ± 0.07 | 4.26 ± 0.03 | 4.52 ± 0.08 |
+| 3 | 4.15 ± 0.11 | 4.20 ± 0.15 | 4.25 ± 0.10 | 4.07 ± 0.06 | 4.10 ± 0.03 | 4.43 ± 0.05 |
+
+Bulk fits use 10³ ≤ t ≤ t_max; finite-size fits use L ≥ 16. Excluding the return probability,
+which is dominated by slowly relaxing nearly frozen sites, z_c = 6.0 ± 0.3; the thermal phase
+approaches z = 4.
+
+```
+python scripts/run_finite_size.py --n 1 --Ls 12 16 20 24 28 32 40 48 56 --samples 32 --runs 100
+python scripts/analyze_methods.py
+```

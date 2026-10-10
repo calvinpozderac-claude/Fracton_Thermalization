@@ -124,6 +124,20 @@ def _accumulate(C, n, ref, dens, xs_lo, xs_hi, xmax):
         C[x] += 0.5 * acc / (xs_hi - xs_lo)
 
 
+@njit(cache=True)
+def _transfer(n, ref, c_lo, c_hi):
+    """Mean over bulk bonds c of (Delta N_c)^2, where Delta N_c = sum_{x >= c} (n_x - ref_x)
+    is the charge that crossed the bond (c-1, c) in the window."""
+    L = n.shape[0]
+    acc = 0.0
+    d = 0.0
+    for x in range(L - 1, c_lo - 1, -1):
+        d += n[x] - ref[x]
+        if x < c_hi:
+            acc += d * d
+    return acc / (c_hi - c_lo)
+
+
 @njit(parallel=True, cache=True)
 def correlation_run(N, L, times, xmax, margin, nsamples, seed):
     """Average C(x, t) over `nsamples` independent circuits, in parallel.
@@ -170,12 +184,14 @@ def multitau_schedule(lags, T_total, kmax):
 def correlation_run_multitau(N, L, nlags, ev_times, ev_ptr, ev_idx, xmax, margin, nsamples, seed):
     """C(x, t) of Eq. (8) averaged over x0 in the bulk and over t0 (multi-tau).
 
-    Returns per-sample sums Csum[s, j, x] and window counts cnt[s, j]; the
-    last lag slot nlags holds the equal-time correlation C(x, 0)."""
+    Returns per-sample sums Csum[s, j, x], window counts cnt[s, j] and the summed
+    charge-transfer variance Vsum[s, j] (see _transfer); the last lag slot
+    nlags holds the equal-time correlation C(x, 0)."""
     P = N * (L - 1) // 2
     dens = N / L
     Csum = np.zeros((nsamples, nlags + 1, xmax + 1))
     cnt = np.zeros((nsamples, nlags + 1))
+    Vsum = np.zeros((nsamples, nlags + 1))
     for s in prange(nsamples):
         np.random.seed(seed + 7919 * s)
         rng = np.empty(1, np.uint64)
@@ -193,9 +209,34 @@ def correlation_run_multitau(N, L, nlags, ev_times, ev_ptr, ev_idx, xmax, margin
             for b in range(ev_ptr[a], ev_ptr[a + 1]):
                 j = ev_idx[b]
                 _accumulate(Csum[s, j], n, refs[j], dens, margin, L - margin, xmax)
+                Vsum[s, j] += _transfer(n, refs[j], margin, L - margin)
                 cnt[s, j] += 1
                 refs[j] = n
-    return Csum, cnt
+    return Csum, cnt, Vsum
+
+
+@njit(parallel=True, cache=True)
+def quadrupole_series(N, L, dt, nsteps, burn, nsamples, seed):
+    """Equilibrium time series of the quadrupole moment Q = sum_x (x - xc)^2 n_x,
+    the slowest mode of a closed chain with fixed N and P. Starts from a uniform
+    symmetry-sector state (stationary), records Q every dt time steps after
+    `burn` steps. Returns Q[s, k]."""
+    P = N * (L - 1) // 2
+    xc = (L - 1) / 2.0
+    Q = np.zeros((nsamples, nsteps))
+    for s in prange(nsamples):
+        np.random.seed(seed + 7919 * s)
+        rng = np.empty(1, np.uint64)
+        rng[0] = _splitmix64(np.uint64(seed * 1000003 + s)) | np.uint64(1)
+        n = random_sector_state(N, L, P)
+        apply_gates(n, burn * L, rng)
+        for k in range(nsteps):
+            apply_gates(n, dt * L, rng)
+            q = 0.0
+            for x in range(L):
+                q += (x - xc) * (x - xc) * n[x]
+            Q[s, k] = q
+    return Q
 
 
 def log_times(tmax, per_decade=10, tmin=1):

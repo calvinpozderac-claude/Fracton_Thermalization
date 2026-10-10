@@ -49,19 +49,24 @@ def main():
         d = np.load(out)
         assert d["N"] == N and d["L"] == L and np.array_equal(d["lags"], lags)
         Csum, cnt, nsamp = list(d["Csum"]), list(d["cnt"]), int(d["nsamples"])
+        # older files have no transfer data; Vsum/Vcnt then cover only new samples
+        Vsum = list(d["Vsum"]) if "Vsum" in d else []
+        Vcnt = list(d["Vcnt"]) if "Vcnt" in d else []
     else:
-        Csum, cnt, nsamp = [], [], 0
+        Csum, cnt, nsamp, Vsum, Vcnt = [], [], 0, [], []
 
     print(f"N={N} L={L} n={N/L:.4f} lags 1..{tmax} T={T} margin={margin} -> {out}", flush=True)
     for b in range(a.batches):
         t0 = time.time()
         seed = 1 + nsamp
-        Cs, cn = correlation_run_multitau(N, L, len(lags), ev_t, ev_p, ev_i, a.xmax, margin, a.batch, seed)
+        Cs, cn, Vs = correlation_run_multitau(N, L, len(lags), ev_t, ev_p, ev_i, a.xmax, margin, a.batch, seed)
         Csum += list(Cs)
         cnt += list(cn)
+        Vsum += list(Vs)
+        Vcnt += list(cn)
         nsamp += a.batch
         np.savez(out, Csum=np.array(Csum), cnt=np.array(cnt), lags=lags, N=N, L=L,
-                 nsamples=nsamp, margin=margin, T=T)
+                 nsamples=nsamp, margin=margin, T=T, Vsum=np.array(Vsum), Vcnt=np.array(Vcnt))
         print(f"batch {b+1}/{a.batches}: {nsamp} samples, {time.time()-t0:.0f}s", flush=True)
 
 
