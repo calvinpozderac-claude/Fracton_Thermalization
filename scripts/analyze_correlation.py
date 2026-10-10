@@ -116,13 +116,17 @@ def main(paths):
             z, zerr, c0 = fit_z(t, x0, tmin, tmax)
             zb = bootstrap_fit(d, tmin, tmax)
             lines.append(f"z fit on {tmin:.3g} <= t <= {tmax:.3g}: z = {z:.2f} +- {zb:.2f} (bootstrap)")
-            if (tmin, tmax) in [(10, 1e5), (10 ** 5.5, 1e7)] or (n != 1 and (tmin, tmax) == (1e4, 1e6)):
+            if abs(n - 1) < 1e-9 and (tmin, tmax) in [(10, 1e5), (10 ** 5.5, 1e7)]:
                 tt = np.logspace(np.log10(tmin), np.log10(tmax), 10)
                 ax[1].plot(tt, np.exp(c0) * tt ** (1 / z), "k--", lw=1)
                 ax[1].text(tt[5], np.exp(c0) * tt[5] ** (1 / z) * 1.25, f"z={z:.1f}", fontsize=8)
         # raw-C (no offset subtraction) for comparison
         Craw = d["Csum"].sum(0)[:-1] / d["cnt"].sum(0)[:-1, None]
         x0raw = np.array([zero_crossing(c) for c in Craw])
+        for tmin, tmax in windows:
+            if tmax > t[-1] * 1.0001 or tmin < t[0]:
+                continue
+            lines.append(f"  (no offset subtraction) z on {tmin:.3g} <= t <= {tmax:.3g}: {fit_z(t, x0raw, tmin, tmax)[0]:.2f}")
         lines.append("x0(t) [t, x0, err, x0 without offset subtraction, z_eff]:")
         for i in range(len(t)):
             lines.append(f"  {t[i]:>9d}  {x0[i]:7.3f}  {err[i]:6.3f}  {x0raw[i]:7.3f}  {zr[i]:6.2f}")
